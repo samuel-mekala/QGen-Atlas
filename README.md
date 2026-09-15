@@ -192,6 +192,5 @@ QGen-Atlas/
 
 ## 📜 Author & Acknowledgments
 
-- **Author**: Samuel Mekala
+- **Author**: Sri Hari Priya Panchumarthi **Samuel Mekala**
 - **Live Application**: [https://qgen-atlas.onrender.com/](https://qgen-atlas.onrender.com/)
-- **GitHub Repository**: [https://github.com/samuel-mekala/QGen-Atlas](https://github.com/samuel-mekala/QGen-Atlas)
