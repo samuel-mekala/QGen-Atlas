@@ -18,6 +18,9 @@ An advanced end-to-end Natural Language Processing (NLP) web application and ass
 ### 1. Multilingual Query Generator Dashboard Interface
 ![QGen Atlas Dashboard Interface](static/images/app_form.png)
 
+### 2. Generated Assessment Session Interface
+![QGen Atlas Quiz Session Interface](static/images/app_quiz.png)
+
 ---
 
 ## 📌 Project Overview & Objectives
@@ -176,7 +179,8 @@ QGen-Atlas/
 ├── .gitignore                        # Git exclusion rules (.venv, nltk_data, __pycache__)
 ├── static/
 │   └── images/
-│       └── app_form.png              # Real screenshot: Web Application Interface
+│       ├── app_form.png              # Screenshot 1: Web Application Dashboard Form Interface
+│       └── app_quiz.png              # Screenshot 2: Generated Assessment Session Interface
 ├── templates/
 │   ├── index.html                    # Main dashboard form interface (Bootstrap & Volt theme)
 │   ├── quiz.html                     # Interactive assessment test-taking interface
