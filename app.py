@@ -19,15 +19,7 @@ CURRENT_QUIZ = {}
 
 @app.route('/')
 def index():
-    default_text = (
-        "Natural Language Processing (NLP) is a subfield of artificial intelligence that focuses "
-        "on the interaction between computers and human language. Query generation involves "
-        "automatically extracting key information and creating relevant questions based on source text. "
-        "Multilingual NLP frameworks enhance accessibility by providing translation across multiple target languages. "
-        "Response validation evaluates user answers against expected reference answers using algorithms like "
-        "Levenshtein distance to calculate match percentage accurately."
-    )
-    return render_template('index.html', languages=SUPPORTED_LANGUAGES, default_text=default_text)
+    return render_template('index.html', languages=SUPPORTED_LANGUAGES, default_text="")
 
 @app.route('/generate', methods=['POST'])
 def generate():
