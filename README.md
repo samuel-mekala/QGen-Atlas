@@ -1,15 +1,22 @@
 # 🧠 QGen Atlas - Multilingual Query Generation & Response Validation
 
-[![Live Web Application](https://img.shields.io/badge/Live%20Demo-Render-brightgreen?style=for-the-badge&logo=render)](https://github.com/samuel-mekala/QGen-Atlas)
+[![Live Web Application](https://img.shields.io/badge/Live%20Demo-Render-brightgreen?style=for-the-badge&logo=render)](https://qgen-atlas.onrender.com/)
 [![Python Version](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/Flask-3.0%2B-black?style=for-the-badge&logo=flask)](https://flask.palletsprojects.com/)
 [![NLP Engine](https://img.shields.io/badge/NLTK-Chunking-orange?style=for-the-badge&logo=nltk)](https://www.nltk.org/)
-[![Translation](https://img.shields.io/badge/Translation-Multilingual-purple?style=for-the-badge&logo=google-translate)](https://github.com/samuel-mekala/QGen-Atlas)
-[![Validation](https://img.shields.io/badge/Algorithm-Levenshtein%20Distance-red?style=for-the-badge)](https://github.com/samuel-mekala/QGen-Atlas)
+[![Translation](https://img.shields.io/badge/Translation-Multilingual-purple?style=for-the-badge&logo=google-translate)](https://qgen-atlas.onrender.com/)
+[![Validation](https://img.shields.io/badge/Algorithm-Levenshtein%20Distance-red?style=for-the-badge)](https://qgen-atlas.onrender.com/)
 
-An advanced end-to-end Natural Language Processing (NLP) web framework and assessment platform designed for automated query generation (objective & subjective) from source text, multi-language translation, and string-distance response validation.
+An advanced end-to-end Natural Language Processing (NLP) web application and assessment platform designed for automated query generation (objective & subjective) from source text, multi-language translation, and string-distance response validation.
 
-🔗 **GitHub Repository**: [https://github.com/samuel-mekala/QGen-Atlas](https://github.com/samuel-mekala/QGen-Atlas)
+🔗 **Live Application URL**: [https://qgen-atlas.onrender.com/](https://qgen-atlas.onrender.com/)
+
+---
+
+## 🖼️ Application Interface & Screenshots
+
+### 1. Multilingual Query Generator Dashboard Interface
+![QGen Atlas Dashboard Interface](static/images/app_form.png)
 
 ---
 
@@ -167,6 +174,9 @@ QGen-Atlas/
 ├── requirements.txt                  # Production Python dependencies (Flask, NLTK, deep-translator, Levenshtein)
 ├── Procfile                          # Production process config for Gunicorn deployment
 ├── .gitignore                        # Git exclusion rules (.venv, nltk_data, __pycache__)
+├── static/
+│   └── images/
+│       └── app_form.png              # Real screenshot: Web Application Interface
 ├── templates/
 │   ├── index.html                    # Main dashboard form interface (Bootstrap & Volt theme)
 │   ├── quiz.html                     # Interactive assessment test-taking interface
@@ -179,5 +189,5 @@ QGen-Atlas/
 ## 📜 Author & Acknowledgments
 
 - **Author**: Samuel Mekala
-- **Institution / Project**: QGen Atlas - Multilingual NLP Framework
+- **Live Application**: [https://qgen-atlas.onrender.com/](https://qgen-atlas.onrender.com/)
 - **GitHub Repository**: [https://github.com/samuel-mekala/QGen-Atlas](https://github.com/samuel-mekala/QGen-Atlas)
