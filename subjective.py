@@ -5,11 +5,13 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
 
-GENERIC_BLACKLIST = {
-    'this text', 'the text', 'this study', 'a system', 'the system',
-    'this paper', 'the paper', 'some cases', 'this approach', 'the method',
-    'a result', 'the result', 'a subfield', 'this article', 'the process',
-    'a method', 'an example', 'the following', 'this section', 'in addition'
+STOP_CONCEPTS = {
+    'year', 'years', 'time', 'work', 'day', 'days', 'date', 'dates',
+    'every year', 'this year', 'that time', 'the work', 'the text',
+    'this text', 'this study', 'a system', 'the system', 'this paper',
+    'the paper', 'some cases', 'this approach', 'the method', 'a result',
+    'the result', 'a subfield', 'this article', 'the process', 'a method',
+    'an example', 'the following', 'this section', 'in addition', 'a key information'
 }
 
 def _ensure_nltk():
@@ -40,7 +42,11 @@ class SubjectiveTest:
             self.num_questions = 5
         self.questions = []
 
-    def extract_core_subject(self, sentence):
+    def extract_core_entities(self, sentence):
+        """
+        Extracts key entities, proper nouns (NNP), and informative concepts,
+        filtering out generic terms like 'year', 'time', 'work'.
+        """
         try:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
@@ -58,36 +64,46 @@ class SubjectiveTest:
             if subtree.label() == 'NP':
                 phrase = " ".join([word for word, tag in subtree.leaves()]).strip()
                 clean_phrase = phrase.lower()
-                if len(clean_phrase) > 2 and clean_phrase not in GENERIC_BLACKLIST:
-                    candidates.append(phrase)
+
+                if len(clean_phrase) <= 2 or clean_phrase in STOP_CONCEPTS:
+                    continue
+                if clean_phrase.startswith(('in ', 'by ', 'with ', 'from ', 'the ', 'this ')):
+                    clean_phrase_core = re.sub(r'^(the|this|a|an|in|by|with|from)\s+', '', clean_phrase)
+                    if clean_phrase_core in STOP_CONCEPTS or len(clean_phrase_core) <= 2:
+                        continue
+                candidates.append(phrase)
                     
         return candidates
 
-    def select_semantically_aligned_question(self, concept, sentence):
+    def generate_aligned_qa_unit(self, concept, sentence):
         """
-        Selects a question template that semantically matches the verb action
-        in the target reference sentence.
+        Generates a question and reference answer as a SINGLE unified unit,
+        ensuring question intent matches reference answer facts.
         """
         s_lower = sentence.lower()
 
-        # 1. Definition / Identity sentences (is, are, refers to, defines)
-        if any(v in s_lower for v in [' is ', ' are ', ' refers to ', ' defines ', ' means ']):
-            return f"What is {concept}?"
+        # 1. Age / Numeric Duration (e.g. "twenty-three years old", "hanged at age 23")
+        if any(w in s_lower for w in ['years old', 'age of', 'hanged', 'born in', 'died in']):
+            return f"How old was {concept} when this event occurred according to the text?", sentence
 
-        # 2. Functional / Utility sentences (enables, provides, allows, facilitates)
-        elif any(v in s_lower for v in ['enables', 'provides', 'allows', 'helps', 'facilitates', 'enhances']):
-            return f"What is the role and purpose of {concept}?"
+        # 2. Date / Historical Event Timing (e.g. "15th August 1947", "celebrated on")
+        elif any(w in s_lower for w in ['celebrated on', 'achieved on', '1947', '1950', 'august', 'date']):
+            return f"When is {concept} celebrated or observed according to the passage?", sentence
 
-        # 3. Measurement / Calculation sentences (calculates, measures, computes, evaluates)
-        elif any(v in s_lower for v in ['calculates', 'measures', 'computes', 'evaluates', 'scores']):
-            return f"How does {concept} evaluate or measure data?"
+        # 3. Role / Contribution (e.g. "led", "contributed", "role", "fought", "sacrificed")
+        elif any(w in s_lower for w in ['led', 'contributed', 'played', 'fought', 'sacrificed', 'role', 'leader']):
+            return f"What contribution or role does {concept} have in the text?", sentence
 
-        # 4. Process / Method sentences (involves, consists of, uses, applies)
-        elif any(v in s_lower for v in ['involves', 'consists', 'uses', 'applies', 'utilizes']):
-            return f"Explain how {concept} works according to the text."
+        # 4. Definition / Identity (is, are, refers to, defines)
+        elif any(w in s_lower for w in [' is ', ' are ', ' refers to ', ' defines ', ' means ']):
+            return f"What is {concept}?", sentence
+
+        # 5. Process / Function (enables, provides, allows, facilitates, calculates, measures)
+        elif any(w in s_lower for w in ['enables', 'provides', 'allows', 'calculates', 'measures', 'computes']):
+            return f"What function or purpose does {concept} serve?", sentence
 
         # Default fallback
-        return f"Discuss {concept} in detail based on the text."
+        return f"Explain the significance of {concept} as described in the passage.", sentence
 
     def generate_questions(self):
         try:
@@ -111,14 +127,14 @@ class SubjectiveTest:
             if count >= self.num_questions:
                 break
             
-            concepts = self.extract_core_subject(sentence)
+            concepts = self.extract_core_entities(sentence)
             if not concepts:
                 continue
 
             target_concept = None
             for c in concepts:
                 c_clean = c.lower().strip()
-                if c_clean not in used_concepts and c_clean not in GENERIC_BLACKLIST:
+                if c_clean not in used_concepts and c_clean not in STOP_CONCEPTS:
                     target_concept = c
                     used_concepts.add(c_clean)
                     break
@@ -126,8 +142,8 @@ class SubjectiveTest:
             if not target_concept:
                 target_concept = concepts[0]
 
-            # Generate semantically aligned question stem
-            question_text = self.select_semantically_aligned_question(target_concept, sentence)
+            # Generate unified Q&A unit
+            question_text, reference_answer = self.generate_aligned_qa_unit(target_concept, sentence)
             
             count += 1
             item = {
@@ -135,7 +151,7 @@ class SubjectiveTest:
                 "type": "subjective",
                 "question": question_text,
                 "target_concept": target_concept,
-                "answer": sentence,  # Reference answer sentence matches question intent
+                "answer": reference_answer,
                 "original_sentence": sentence
             }
             questions_data.append(item)

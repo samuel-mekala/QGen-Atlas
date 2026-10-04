@@ -5,12 +5,13 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
 
-# Blacklist of generic, non-informative, or leading phrases that lead to unnatural questions
-GENERIC_BLACKLIST = {
-    'this text', 'the text', 'this study', 'a system', 'the system',
-    'this paper', 'the paper', 'some cases', 'this approach', 'the method',
-    'a result', 'the result', 'a subfield', 'this article', 'the process',
-    'a method', 'an example', 'the following', 'this section', 'in addition'
+STOP_CONCEPTS = {
+    'year', 'years', 'time', 'work', 'day', 'days', 'date', 'dates',
+    'every year', 'this year', 'that time', 'the work', 'the text',
+    'this text', 'this study', 'a system', 'the system', 'this paper',
+    'the paper', 'some cases', 'this approach', 'the method', 'a result',
+    'the result', 'a subfield', 'this article', 'the process', 'a method',
+    'an example', 'the following', 'this section', 'in addition', 'a key information'
 }
 
 STOP_WORDS = {
@@ -52,10 +53,6 @@ class ObjectiveTest:
         self.answers = []
 
     def extract_informative_noun_phrases(self, sentence):
-        """
-        Extracts high-value, informative noun phrases while filtering out
-        generic terms, pronouns, and prepositional fragments.
-        """
         try:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
@@ -64,6 +61,7 @@ class ObjectiveTest:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
 
+        # Prioritize Proper Nouns (NNP) first, then multi-word Noun Phrases
         grammar = r"NP: {<NNP.*>+ | <JJ>*<NN.*>+}"
         cp = RegexpParser(grammar)
         tree = cp.parse(tagged)
@@ -74,12 +72,10 @@ class ObjectiveTest:
                 phrase = " ".join([word for word, tag in subtree.leaves()]).strip()
                 clean_phrase = phrase.lower().strip()
 
-                # Filter out short, stopword, or generic blacklist phrases
-                if len(clean_phrase) <= 2 or clean_phrase in GENERIC_BLACKLIST:
+                if len(clean_phrase) <= 2 or clean_phrase in STOP_CONCEPTS:
                     continue
                 if clean_phrase in STOP_WORDS or clean_phrase.startswith(('in ', 'by ', 'with ', 'from ')):
                     continue
-                # Must contain at least one meaningful alphabetic word
                 if not any(c.isalpha() for c in clean_phrase):
                     continue
 
@@ -97,7 +93,6 @@ class ObjectiveTest:
         if not sentences:
             return []
 
-        # Filter out short/fragment sentences
         valid_sentences = [s.strip() for s in sentences if len(s.strip().split()) >= 6]
         if not valid_sentences:
             valid_sentences = sentences
@@ -114,10 +109,9 @@ class ObjectiveTest:
             if not nps:
                 continue
 
-            # Prefer proper nouns or longer informative phrases not already used
             target_key = None
             for np in sorted(nps, key=len, reverse=True):
-                if np.lower() not in used_answers:
+                if np.lower() not in used_answers and np.lower() not in STOP_CONCEPTS:
                     target_key = np
                     used_answers.add(np.lower())
                     break
@@ -125,14 +119,8 @@ class ObjectiveTest:
             if not target_key:
                 target_key = nps[0]
 
-            # Replace target phrase while preserving grammatical flow
-            # If target key starts the sentence, capitalize blank label
-            if sentence.startswith(target_key):
-                question_text = sentence.replace(target_key, "________", 1)
-            else:
-                question_text = sentence.replace(target_key, "________", 1)
+            question_text = sentence.replace(target_key, "________", 1)
 
-            # Ensure sentence doesn't start with raw preposition fragment
             if question_text.startswith("________ by ") or question_text.startswith("________ in "):
                 continue
 

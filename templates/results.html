@@ -49,7 +49,7 @@
                 <small class="opacity-75" style="font-size: 0.75rem;">Match Score</small>
             </div>
             <h3 class="fw-bold mb-1">Response Validation Scorecard</h3>
-            <p class="text-muted">Similarity measured via <strong>Levenshtein Distance Algorithm</strong> in language: <strong>{{ lang_name }}</strong></p>
+            <p class="text-muted">Evaluated via <strong>Hybrid Semantic Engine & Levenshtein Metrics</strong> in <strong>{{ lang_name }}</strong></p>
         </div>
 
         <!-- Question breakdown -->
@@ -79,8 +79,8 @@
 
                 <div class="mt-2">
                     <div class="d-flex justify-content-between text-muted fs-7 mb-1">
-                        <small>Levenshtein Character Distance: {{ res.levenshtein_distance }} edit(s)</small>
-                        <small>Similarity: {{ res.similarity_percentage }}%</small>
+                        <small><i class="fa-solid fa-ruler me-1"></i>Character Distance: {{ res.levenshtein_distance }} edit(s) | Character Similarity: {{ res.levenshtein_similarity }}%</small>
+                        <small class="fw-bold">Evaluated Score: {{ res.similarity_percentage }}%</small>
                     </div>
                     <div class="progress progress-bar-custom">
                         <div class="progress-bar bg-{{ res.status_color }}" role="progressbar" style="width: {{ res.similarity_percentage }}%;"></div>

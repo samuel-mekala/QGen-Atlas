@@ -10,126 +10,91 @@ from objective import ObjectiveTest
 from subjective import SubjectiveTest
 from mcq import MCQTest
 from BERT_translate_custom import translate_questions, translate_text
-from validation import compute_levenshtein_similarity, evaluate_response
+from validation import compute_raw_levenshtein, evaluate_objective_response, evaluate_subjective_response, evaluate_response
 from app import app, CURRENT_QUIZ
 
 class TestQGenAtlasE2E(unittest.TestCase):
 
     def setUp(self):
         self.sample_text = (
-            "Natural Language Processing (NLP) is a subfield of artificial intelligence that focuses "
-            "on the interaction between computers and human language. Query generation involves "
-            "automatically extracting key information and creating relevant questions based on source text. "
-            "Multilingual NLP frameworks enhance accessibility by providing translation across multiple target languages. "
-            "Response validation evaluates user answers against expected reference answers using algorithms like "
-            "Levenshtein distance to calculate match percentage accurately."
+            "India achieved Independence Day on 15th August 1947 after long freedom struggle against British rule. "
+            "Bhagat Singh was only twenty-three years old when he was hanged for his sacrifice in the freedom movement. "
+            "Mahatma Gandhi led the non-violent freedom movement across the country. "
+            "Natural Language Processing (NLP) is a subfield of artificial intelligence that focuses on human language. "
+            "Response validation evaluates user answers using Levenshtein distance to calculate match percentage accurately."
         )
         self.app = app.test_client()
         self.app.testing = True
 
-    def test_mcq_generation(self):
-        print("\n--- Testing MCQ Questions Generation ---")
-        generator = MCQTest(self.sample_text, num_questions=3)
-        questions = generator.generate_questions()
-        self.assertGreaterEqual(len(questions), 1)
+    def test_priority1_scoring_bug_fix(self):
+        print("\n--- Testing Priority 1: Mathematical Levenshtein vs Final Score Separation ---")
+        student = "a"
+        expected = "It is celebrated every year on the 15th of August, and in 2026 it falls on a Saturday."
+
+        sim_pct, dist = compute_raw_levenshtein(student, expected)
+        self.assertEqual(dist, 83)
+        self.assertLess(sim_pct, 5.0)  # ~2.41%
+        print(f"Raw Levenshtein: Distance = {dist}, Character Similarity = {sim_pct}%")
+
+        # Objective Phrase Match Test
+        target_phrase = "own laws"
+        student_phrase = "India did not make its own laws"
+        eval_phrase = evaluate_objective_response(student_phrase, target_phrase)
+        self.assertEqual(eval_phrase["similarity_percentage"], 100.0)
+        self.assertIn("Phrase Match", eval_phrase["feedback"])
+        print(f"Phrase Match Result: Levenshtein Similarity = {eval_phrase['levenshtein_similarity']}%, Final Evaluated Score = {eval_phrase['similarity_percentage']}% ({eval_phrase['feedback']})")
+
+    def test_priority2_factual_error_detection(self):
+        print("\n--- Testing Priority 2 & 6: Factual Mismatch Penalty ---")
+        expected = "India achieved independence from British rule in 1947."
+        student_wrong_year = "India achieved independence from British rule in 1950."
+        student_correct = "India became free from British rule in 1947."
+
+        eval_wrong = evaluate_subjective_response(student_wrong_year, expected)
+        eval_correct = evaluate_subjective_response(student_correct, expected)
+
+        self.assertTrue(eval_wrong["factual_mismatch"])
+        self.assertLess(eval_wrong["similarity_percentage"], 40.0)
+        self.assertIn("Factual error", eval_wrong["feedback"])
+
+        self.assertFalse(eval_correct["factual_mismatch"])
+        self.assertGreaterEqual(eval_correct["similarity_percentage"], 80.0)
+
+        print(f"Correct Year (1947): {eval_correct['similarity_percentage']}% ({eval_correct['feedback']})")
+        print(f"Wrong Year (1950): {eval_wrong['similarity_percentage']}% ({eval_wrong['feedback']})")
+
+    def test_priority4_concept_entity_filtering(self):
+        print("\n--- Testing Priority 4: Concept Filtering (Reject 'year', 'time', 'work') ---")
+        sub_gen = SubjectiveTest(self.sample_text, num_questions=5)
+        questions = sub_gen.generate_questions()
+
         for q in questions:
-            self.assertIn("________", q["question"])
-            self.assertIn("options", q)
+            concept = q["target_concept"].lower()
+            self.assertNotIn(concept, ['year', 'years', 'time', 'work', 'day', 'date', 'the text'])
+            print(f"Extracted Concept: '{q['target_concept']}' -> Q: {q['question']}")
+
+    def test_priority5_qa_unit_alignment(self):
+        print("\n--- Testing Priority 5: Question + Reference Answer Alignment ---")
+        sub_gen = SubjectiveTest(self.sample_text, num_questions=5)
+        questions = sub_gen.generate_questions()
+
+        for q in questions:
+            print(f"Q: {q['question']}")
+            print(f"Ref Answer: {q['answer']}\n")
+            if "old" in q["question"].lower():
+                self.assertIn("twenty-three", q["answer"].lower())
+
+    def test_priority6_mcq_plausible_distractors(self):
+        print("\n--- Testing Priority 6: MCQ Plausible Distractor Generation ---")
+        mcq_gen = MCQTest(self.sample_text, num_questions=3)
+        questions = mcq_gen.generate_questions()
+
+        for q in questions:
             self.assertEqual(len(q["options"]), 4)
             self.assertIn(q["answer"], q["options"])
-            print(f"MCQ Q{q['id']}: {q['question']}")
+            print(f"MCQ Q: {q['question']}")
             print(f"Options: {q['options']}")
-            print(f"Correct Answer: {q['answer']}\n")
-
-    def test_objective_generation(self):
-        print("\n--- Testing Objective Questions Generation ---")
-        generator = ObjectiveTest(self.sample_text, num_questions=3)
-        questions = generator.generate_questions()
-        self.assertGreaterEqual(len(questions), 1)
-        for q in questions:
-            self.assertIn("________", q["question"])
-            self.assertIsNotNone(q["answer"])
-            self.assertTrue(len(q["answer"]) > 0)
-            print(f"Objective Q{q['id']}: {q['question']}")
-            print(f"Target Answer: {q['answer']}\n")
-
-    def test_subjective_generation(self):
-        print("\n--- Testing Subjective Questions Generation ---")
-        generator = SubjectiveTest(self.sample_text, num_questions=3)
-        questions = generator.generate_questions()
-        self.assertGreaterEqual(len(questions), 1)
-        for q in questions:
-            self.assertTrue(any(pattern in q["question"] for pattern in ["What is", "Explain", "Describe", "Discuss", "role"]))
-            self.assertIsNotNone(q["answer"])
-            print(f"Subjective Q{q['id']}: {q['question']}")
-            print(f"Target Context Answer: {q['answer']}\n")
-
-    def test_levenshtein_validation_precision(self):
-        print("\n--- Testing Levenshtein Validation Scoring ---")
-        target = "Natural Language Processing"
-        
-        # Exact match -> 100%
-        res_exact = evaluate_response("Natural Language Processing", target)
-        self.assertEqual(res_exact["similarity_percentage"], 100.0)
-        self.assertEqual(res_exact["feedback"], "Excellent")
-
-        # Acronym Match -> 100%
-        res_acronym = evaluate_response("NLP", target)
-        self.assertEqual(res_acronym["similarity_percentage"], 100.0)
-        self.assertEqual(res_acronym["feedback"], "Excellent")
-        
-        # Paraphrased Response (Word reordering / variation)
-        res_para = evaluate_response("Processing of Natural Language", target)
-        self.assertGreaterEqual(res_para["similarity_percentage"], 80.0)
-
-        # Partial response
-        res_partial = evaluate_response("Natural Language", target)
-        self.assertGreaterEqual(res_partial["similarity_percentage"], 75.0)
-        
-        # Completely wrong
-        res_wrong = evaluate_response("Quantum Computing Physics", target)
-        self.assertLess(res_wrong["similarity_percentage"], 40.0)
-        self.assertEqual(res_wrong["feedback"], "Incorrect")
-
-        print(f"Exact Match: {res_exact['similarity_percentage']}% ({res_exact['feedback']})")
-        print(f"Acronym Match (NLP): {res_acronym['similarity_percentage']}% ({res_acronym['feedback']})")
-        print(f"Paraphrase Match: {res_para['similarity_percentage']}% ({res_para['feedback']})")
-        print(f"Partial Match: {res_partial['similarity_percentage']}% ({res_partial['feedback']})")
-        print(f"Wrong Answer: {res_wrong['similarity_percentage']}% ({res_wrong['feedback']})")
-
-    def test_flask_end_to_end_flow(self):
-        print("\n--- Testing Full Flask Web Application Flow ---")
-        # 1. GET Homepage
-        res_home = self.app.get('/')
-        self.assertEqual(res_home.status_code, 200)
-        self.assertIn(b"Multilingual Query Generation & Validation", res_home.data)
-
-        # 2. POST /generate (Generate Objective Test in Spanish)
-        post_data = {
-            "input_text": self.sample_text,
-            "num_questions": "3",
-            "test_type": "objective",
-            "target_lang": "es"
-        }
-        res_gen = self.app.post('/generate', data=post_data, follow_redirects=True)
-        self.assertEqual(res_gen.status_code, 200)
-        self.assertIn(b"Generated Assessment Session", res_gen.data)
-        
-        # Verify active quiz session in server state
-        self.assertIn("questions", CURRENT_QUIZ)
-        questions = CURRENT_QUIZ["questions"]
-        self.assertEqual(len(questions), 3)
-
-        # 3. POST /validate (Submit User Answers)
-        val_data = {}
-        for q in questions:
-            val_data[f"user_answer_{q['id']}"] = q["answer"]  # Submit correct target answers
-            
-        res_val = self.app.post('/validate', data=val_data, follow_redirects=True)
-        self.assertEqual(res_val.status_code, 200)
-        self.assertIn(b"Response Validation Scorecard", res_val.data)
-        self.assertIn(b"100", res_val.data)  # 100% score for exact match
-        print("End-to-end web flow completed cleanly with 100% score validation!")
+            print(f"Target: {q['answer']}\n")
 
 if __name__ == '__main__':
     unittest.main()

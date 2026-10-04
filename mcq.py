@@ -1,16 +1,21 @@
 import os
 import tempfile
 import random
+import re
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
 
-GENERIC_BLACKLIST = {
-    'this text', 'the text', 'this study', 'a system', 'the system',
-    'this paper', 'the paper', 'some cases', 'this approach', 'the method',
-    'a result', 'the result', 'a subfield', 'this article', 'the process',
-    'a method', 'an example', 'the following', 'this section', 'in addition'
+STOP_CONCEPTS = {
+    'year', 'years', 'time', 'work', 'day', 'days', 'date', 'dates',
+    'every year', 'this year', 'that time', 'the work', 'the text',
+    'this text', 'this study', 'a system', 'the system', 'this paper',
+    'the paper', 'some cases', 'this approach', 'the method', 'a result',
+    'the result', 'a subfield', 'this article', 'the process', 'a method',
+    'an example', 'the following', 'this section', 'in addition', 'a key information'
 }
+
+TIME_DISTRACTORS = ["months", "decades", "centuries", "weeks", "seasons"]
 
 def _ensure_nltk():
     local_path = os.path.join(os.path.dirname(__file__), 'nltk_data')
@@ -58,7 +63,7 @@ class MCQTest:
             if subtree.label() == 'NP':
                 phrase = " ".join([word for word, tag in subtree.leaves()]).strip()
                 clean_phrase = phrase.lower().strip()
-                if len(clean_phrase) > 2 and clean_phrase not in GENERIC_BLACKLIST:
+                if len(clean_phrase) > 2 and clean_phrase not in STOP_CONCEPTS:
                     if not clean_phrase.startswith(('in ', 'by ', 'with ', 'from ')):
                         candidates.append(phrase)
         return candidates
@@ -73,7 +78,6 @@ class MCQTest:
         if not sentences:
             return []
 
-        # Collect pool of all noun phrases from full text for distractor pool
         all_noun_phrases = []
         for s in sentences:
             all_noun_phrases.extend(self.extract_informative_noun_phrases(s))
@@ -107,17 +111,18 @@ class MCQTest:
             if question_text.startswith("________ by ") or question_text.startswith("________ in "):
                 continue
 
-            # Build distractors distinct from target_ans
-            distractors = [np for np in unique_np_pool if np.lower() != target_ans.lower() and len(np) > 2]
-            
-            for fb in fallback_distractors:
-                if len(distractors) >= 3:
-                    break
-                if fb.lower() != target_ans.lower() and fb.lower() not in [d.lower() for d in distractors]:
-                    distractors.append(fb)
+            # Special distractor category for time periods (e.g. "years")
+            if target_ans.lower() in ['years', 'months', 'decades', 'centuries']:
+                chosen_distractors = random.sample([t for t in TIME_DISTRACTORS if t.lower() != target_ans.lower()], 3)
+            else:
+                distractors = [np for np in unique_np_pool if np.lower() != target_ans.lower() and np.lower() not in STOP_CONCEPTS and len(np) > 2]
+                for fb in fallback_distractors:
+                    if len(distractors) >= 3:
+                        break
+                    if fb.lower() != target_ans.lower() and fb.lower() not in [d.lower() for d in distractors]:
+                        distractors.append(fb)
+                chosen_distractors = random.sample(distractors, min(3, len(distractors)))
 
-            chosen_distractors = random.sample(distractors, min(3, len(distractors)))
-            
             options_pool = [target_ans] + chosen_distractors
             random.shuffle(options_pool)
 
