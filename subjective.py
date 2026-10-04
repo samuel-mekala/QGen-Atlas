@@ -1,17 +1,35 @@
 import os
+import tempfile
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
 
-# Add workspace nltk_data path
-NLTK_LOCAL_PATH = os.path.join(os.path.dirname(__file__), 'nltk_data')
-if os.path.exists(NLTK_LOCAL_PATH) and NLTK_LOCAL_PATH not in nltk.data.path:
-    nltk.data.path.insert(0, NLTK_LOCAL_PATH)
+def _ensure_nltk():
+    local_path = os.path.join(os.path.dirname(__file__), 'nltk_data')
+    if not os.path.exists(local_path):
+        local_path = os.path.join(tempfile.gettempdir(), 'nltk_data')
+    os.makedirs(local_path, exist_ok=True)
+    if local_path not in nltk.data.path:
+        nltk.data.path.insert(0, local_path)
+    
+    for pkg in ['punkt', 'punkt_tab', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng']:
+        try:
+            nltk.data.find(pkg)
+        except (LookupError, Exception):
+            try:
+                nltk.download(pkg, download_dir=local_path, quiet=True)
+            except Exception:
+                pass
+
+_ensure_nltk()
 
 class SubjectiveTest:
     def __init__(self, text, num_questions=5):
         self.text = text
-        self.num_questions = int(num_questions)
+        try:
+            self.num_questions = int(num_questions)
+        except (ValueError, TypeError):
+            self.num_questions = 5
         self.questions = []
         self.templates = [
             "What is {term}?",
@@ -22,8 +40,14 @@ class SubjectiveTest:
         ]
 
     def extract_key_concepts(self, sentence):
-        words = word_tokenize(sentence)
-        tagged = pos_tag(words)
+        try:
+            words = word_tokenize(sentence)
+            tagged = pos_tag(words)
+        except LookupError:
+            _ensure_nltk()
+            words = word_tokenize(sentence)
+            tagged = pos_tag(words)
+
         grammar = r"NP: {<DT>?<JJ>*<NN.*>+}"
         cp = RegexpParser(grammar)
         tree = cp.parse(tagged)
@@ -37,7 +61,12 @@ class SubjectiveTest:
         return phrases
 
     def generate_questions(self):
-        sentences = sent_tokenize(self.text)
+        try:
+            sentences = sent_tokenize(self.text)
+        except LookupError:
+            _ensure_nltk()
+            sentences = sent_tokenize(self.text)
+
         if not sentences:
             return []
 

@@ -115,8 +115,9 @@
                                 <label for="test_type" class="form-label fw-semibold">
                                     <i class="fa-solid fa-list-check me-1 text-primary"></i> Question Type
                                 </label>
-                                <select class="form-select" id="test_type" name="test_type">
-                                    <option value="objective" selected>Objective (Fill-in-the-Blank)</option>
+                                <select class="form-select" id="test_type" name="test_type" required>
+                                    <option value="" selected disabled>-- Select Question Type --</option>
+                                    <option value="objective">Objective (Fill-in-the-Blank)</option>
                                     <option value="subjective">Subjective (Conceptual Questions)</option>
                                 </select>
                             </div>
@@ -125,9 +126,10 @@
                                 <label for="num_questions" class="form-label fw-semibold">
                                     <i class="fa-solid fa-hashtag me-1 text-primary"></i> Number of Questions
                                 </label>
-                                <select class="form-select" id="num_questions" name="num_questions">
+                                <select class="form-select" id="num_questions" name="num_questions" required>
+                                    <option value="" selected disabled>-- Select Number of Questions --</option>
                                     <option value="3">3 Questions</option>
-                                    <option value="5" selected>5 Questions</option>
+                                    <option value="5">5 Questions</option>
                                     <option value="7">7 Questions</option>
                                     <option value="10">10 Questions</option>
                                 </select>
@@ -137,9 +139,10 @@
                                 <label for="target_lang" class="form-label fw-semibold">
                                     <i class="fa-solid fa-globe me-1 text-primary"></i> Target Language
                                 </label>
-                                <select class="form-select" id="target_lang" name="target_lang">
+                                <select class="form-select" id="target_lang" name="target_lang" required>
+                                    <option value="" selected disabled>-- Select Target Language --</option>
                                     {% for code, name in languages.items() %}
-                                        <option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ name }}</option>
+                                        <option value="{{ code }}">{{ name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>

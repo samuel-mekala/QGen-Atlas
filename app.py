@@ -1,10 +1,30 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
+import sys
+import tempfile
 import nltk
 
-NLTK_LOCAL_PATH = os.path.join(os.path.dirname(__file__), 'nltk_data')
-if os.path.exists(NLTK_LOCAL_PATH) and NLTK_LOCAL_PATH not in nltk.data.path:
-    nltk.data.path.insert(0, NLTK_LOCAL_PATH)
+def ensure_nltk_resources():
+    # 1. Check workspace local nltk_data
+    local_path = os.path.join(os.path.dirname(__file__), 'nltk_data')
+    if not os.path.exists(local_path):
+        local_path = os.path.join(tempfile.gettempdir(), 'nltk_data')
+    
+    os.makedirs(local_path, exist_ok=True)
+    if local_path not in nltk.data.path:
+        nltk.data.path.insert(0, local_path)
+    
+    packages = ['punkt', 'punkt_tab', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng']
+    for pkg in packages:
+        try:
+            nltk.data.find(pkg)
+        except (LookupError, Exception):
+            try:
+                nltk.download(pkg, download_dir=local_path, quiet=True)
+            except Exception as e:
+                print(f"Warning: Failed to download NLTK package {pkg}: {e}")
+
+ensure_nltk_resources()
 
 from objective import ObjectiveTest
 from subjective import SubjectiveTest
@@ -23,66 +43,81 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    text = request.form.get('input_text', '').strip()
-    num_questions = int(request.form.get('num_questions', 5))
-    test_type = request.form.get('test_type', 'objective')
-    target_lang = request.form.get('target_lang', 'en')
+    try:
+        text = request.form.get('input_text', '').strip()
+        num_q_raw = request.form.get('num_questions', '').strip()
+        test_type = request.form.get('test_type', '').strip() or 'objective'
+        target_lang = request.form.get('target_lang', '').strip() or 'en'
 
-    if not text:
+        try:
+            num_questions = int(num_q_raw) if num_q_raw else 5
+        except (ValueError, TypeError):
+            num_questions = 5
+
+        if not text:
+            return redirect(url_for('index'))
+
+        if test_type == 'subjective':
+            generator = SubjectiveTest(text, num_questions=num_questions)
+        else:
+            generator = ObjectiveTest(text, num_questions=num_questions)
+
+        raw_questions = generator.generate_questions()
+
+        if target_lang != 'en':
+            translated_questions = translate_questions(raw_questions, target_lang=target_lang)
+        else:
+            translated_questions = raw_questions
+
+        CURRENT_QUIZ['questions'] = translated_questions
+        CURRENT_QUIZ['test_type'] = test_type
+        CURRENT_QUIZ['target_lang'] = target_lang
+        CURRENT_QUIZ['source_text'] = text
+
+        return render_template('quiz.html', 
+                               questions=translated_questions, 
+                               test_type=test_type, 
+                               target_lang=target_lang,
+                               lang_name=SUPPORTED_LANGUAGES.get(target_lang, target_lang))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('index'))
-
-    if test_type == 'objective':
-        generator = ObjectiveTest(text, num_questions=num_questions)
-    else:
-        generator = SubjectiveTest(text, num_questions=num_questions)
-
-    raw_questions = generator.generate_questions()
-
-    if target_lang != 'en':
-        translated_questions = translate_questions(raw_questions, target_lang=target_lang)
-    else:
-        translated_questions = raw_questions
-
-    CURRENT_QUIZ['questions'] = translated_questions
-    CURRENT_QUIZ['test_type'] = test_type
-    CURRENT_QUIZ['target_lang'] = target_lang
-    CURRENT_QUIZ['source_text'] = text
-
-    return render_template('quiz.html', 
-                           questions=translated_questions, 
-                           test_type=test_type, 
-                           target_lang=target_lang,
-                           lang_name=SUPPORTED_LANGUAGES.get(target_lang, target_lang))
 
 @app.route('/validate', methods=['POST'])
 def validate():
-    questions = CURRENT_QUIZ.get('questions', [])
-    if not questions:
+    try:
+        questions = CURRENT_QUIZ.get('questions', [])
+        if not questions:
+            return redirect(url_for('index'))
+
+        results = []
+        total_score = 0.0
+
+        for item in questions:
+            q_id = str(item['id'])
+            user_ans = request.form.get(f'user_answer_{q_id}', '').strip()
+            expected_ans = item['answer']
+            
+            eval_res = evaluate_response(user_ans, expected_ans, question_type=CURRENT_QUIZ.get('test_type', 'objective'))
+            eval_res['question'] = item['question']
+            eval_res['question_id'] = item['id']
+            
+            results.append(eval_res)
+            total_score += eval_res['similarity_percentage']
+
+        avg_score = round(total_score / len(results), 2) if results else 0.0
+
+        return render_template('results.html', 
+                               results=results, 
+                               avg_score=avg_score, 
+                               test_type=CURRENT_QUIZ.get('test_type', 'objective'),
+                               target_lang=CURRENT_QUIZ.get('target_lang', 'en'),
+                               lang_name=SUPPORTED_LANGUAGES.get(CURRENT_QUIZ.get('target_lang', 'en'), 'English'))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return redirect(url_for('index'))
-
-    results = []
-    total_score = 0.0
-
-    for item in questions:
-        q_id = str(item['id'])
-        user_ans = request.form.get(f'user_answer_{q_id}', '').strip()
-        expected_ans = item['answer']
-        
-        eval_res = evaluate_response(user_ans, expected_ans, question_type=CURRENT_QUIZ.get('test_type', 'objective'))
-        eval_res['question'] = item['question']
-        eval_res['question_id'] = item['id']
-        
-        results.append(eval_res)
-        total_score += eval_res['similarity_percentage']
-
-    avg_score = round(total_score / len(results), 2) if results else 0.0
-
-    return render_template('results.html', 
-                           results=results, 
-                           avg_score=avg_score, 
-                           test_type=CURRENT_QUIZ.get('test_type', 'objective'),
-                           target_lang=CURRENT_QUIZ.get('target_lang', 'en'),
-                           lang_name=SUPPORTED_LANGUAGES.get(CURRENT_QUIZ.get('target_lang', 'en'), 'English'))
 
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
@@ -92,10 +127,15 @@ def api_generate():
     test_type = data.get('test_type', 'objective')
     target_lang = data.get('target_lang', 'en')
 
-    if test_type == 'objective':
-        gen = ObjectiveTest(text, num_questions=num_q)
-    else:
+    try:
+        num_q = int(num_q)
+    except (ValueError, TypeError):
+        num_q = 5
+
+    if test_type == 'subjective':
         gen = SubjectiveTest(text, num_questions=num_q)
+    else:
+        gen = ObjectiveTest(text, num_questions=num_q)
 
     questions = gen.generate_questions()
     if target_lang != 'en':
