@@ -5,6 +5,13 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
 
+GENERIC_BLACKLIST = {
+    'this text', 'the text', 'this study', 'a system', 'the system',
+    'this paper', 'the paper', 'some cases', 'this approach', 'the method',
+    'a result', 'the result', 'a subfield', 'this article', 'the process',
+    'a method', 'an example', 'the following', 'this section', 'in addition'
+}
+
 def _ensure_nltk():
     local_path = os.path.join(os.path.dirname(__file__), 'nltk_data')
     if not os.path.exists(local_path):
@@ -33,7 +40,7 @@ class MCQTest:
             self.num_questions = 5
         self.questions = []
 
-    def extract_noun_phrases(self, sentence):
+    def extract_informative_noun_phrases(self, sentence):
         try:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
@@ -42,17 +49,19 @@ class MCQTest:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
 
-        grammar = r"NP: {<DT>?<JJ>*<NN.*>+}"
+        grammar = r"NP: {<NNP.*>+ | <JJ>*<NN.*>+}"
         cp = RegexpParser(grammar)
         tree = cp.parse(tagged)
         
-        noun_phrases = []
+        candidates = []
         for subtree in tree.subtrees():
             if subtree.label() == 'NP':
-                phrase = " ".join([word for word, tag in subtree.leaves()])
-                if len(phrase.strip()) > 2:
-                    noun_phrases.append(phrase.strip())
-        return noun_phrases
+                phrase = " ".join([word for word, tag in subtree.leaves()]).strip()
+                clean_phrase = phrase.lower().strip()
+                if len(clean_phrase) > 2 and clean_phrase not in GENERIC_BLACKLIST:
+                    if not clean_phrase.startswith(('in ', 'by ', 'with ', 'from ')):
+                        candidates.append(phrase)
+        return candidates
 
     def generate_questions(self):
         try:
@@ -67,7 +76,7 @@ class MCQTest:
         # Collect pool of all noun phrases from full text for distractor pool
         all_noun_phrases = []
         for s in sentences:
-            all_noun_phrases.extend(self.extract_noun_phrases(s))
+            all_noun_phrases.extend(self.extract_informative_noun_phrases(s))
         
         unique_np_pool = list(dict.fromkeys(all_noun_phrases))
 
@@ -88,12 +97,15 @@ class MCQTest:
             if count >= self.num_questions:
                 break
 
-            nps = self.extract_noun_phrases(sentence)
+            nps = self.extract_informative_noun_phrases(sentence)
             if not nps:
                 continue
 
             target_ans = max(nps, key=len)
             question_text = sentence.replace(target_ans, "________", 1)
+
+            if question_text.startswith("________ by ") or question_text.startswith("________ in "):
+                continue
 
             # Build distractors distinct from target_ans
             distractors = [np for np in unique_np_pool if np.lower() != target_ans.lower() and len(np) > 2]

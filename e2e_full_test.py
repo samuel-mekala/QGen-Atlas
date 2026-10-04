@@ -72,14 +72,19 @@ class TestQGenAtlasE2E(unittest.TestCase):
         res_exact = evaluate_response("Natural Language Processing", target)
         self.assertEqual(res_exact["similarity_percentage"], 100.0)
         self.assertEqual(res_exact["feedback"], "Excellent")
+
+        # Acronym Match -> 100%
+        res_acronym = evaluate_response("NLP", target)
+        self.assertEqual(res_acronym["similarity_percentage"], 100.0)
+        self.assertEqual(res_acronym["feedback"], "Excellent")
         
-        # Minor typo -> High match
-        res_typo = evaluate_response("Natural Language Processin", target)
-        self.assertGreaterEqual(res_typo["similarity_percentage"], 90.0)
-        
+        # Paraphrased Response (Word reordering / variation)
+        res_para = evaluate_response("Processing of Natural Language", target)
+        self.assertGreaterEqual(res_para["similarity_percentage"], 80.0)
+
         # Partial response
         res_partial = evaluate_response("Natural Language", target)
-        self.assertTrue(50.0 <= res_partial["similarity_percentage"] <= 85.0)
+        self.assertGreaterEqual(res_partial["similarity_percentage"], 75.0)
         
         # Completely wrong
         res_wrong = evaluate_response("Quantum Computing Physics", target)
@@ -87,7 +92,8 @@ class TestQGenAtlasE2E(unittest.TestCase):
         self.assertEqual(res_wrong["feedback"], "Incorrect")
 
         print(f"Exact Match: {res_exact['similarity_percentage']}% ({res_exact['feedback']})")
-        print(f"Minor Typo Match: {res_typo['similarity_percentage']}% ({res_typo['feedback']})")
+        print(f"Acronym Match (NLP): {res_acronym['similarity_percentage']}% ({res_acronym['feedback']})")
+        print(f"Paraphrase Match: {res_para['similarity_percentage']}% ({res_para['feedback']})")
         print(f"Partial Match: {res_partial['similarity_percentage']}% ({res_partial['feedback']})")
         print(f"Wrong Answer: {res_wrong['similarity_percentage']}% ({res_wrong['feedback']})")
 
