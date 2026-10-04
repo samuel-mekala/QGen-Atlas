@@ -27,10 +27,11 @@ An advanced end-to-end Natural Language Processing (NLP) web application and ass
 
 In modern educational, research, and technical domains, manually constructing comprehension tests and validating user answers is time-consuming and restricted across linguistic boundaries. **QGen Atlas** solves these challenges by combining syntactic parsing, part-of-speech (POS) tagging, regexp chunking, and fuzzy string distance metrics into a unified web-based solution:
 
-1. **Objective Query Generation (Fill-in-the-Blank)**: Syntactically parses source text, extracts key noun phrases, and masks target terms with blanks (`________`) while preserving expected answer keys.
-2. **Subjective Conceptual Query Generation**: Identifies subject entities across sentences and formulates conceptual questions (*"What is..."*, *"Explain the concept of..."*, *"Describe the significance of..."*) paired with ground-truth contextual reference answers.
-3. **Multilingual Translation Module**: Automatically translates generated questions and answer keys into target languages (Spanish, French, German, Hindi, Tamil, Telugu, Chinese, Japanese, Arabic, Russian, Portuguese, Italian).
-4. **Levenshtein Distance Response Validation Engine**: Evaluates user-submitted responses against expected reference answers, calculates exact character edit distance, and computes a calibrated similarity percentage score.
+1. **Multiple Choice Questions (MCQ Generation)**: Syntactically extracts key noun phrases as target answers and dynamically generates 3 distinct contextual distractors to form 4-option multiple choice questions (`Option A`, `Option B`, `Option C`, `Option D`).
+2. **Objective Query Generation (Fill-in-the-Blank)**: Syntactically parses source text, extracts key noun phrases, and masks target terms with blanks (`________`) while preserving expected answer keys.
+3. **Subjective Conceptual Query Generation**: Identifies subject entities across sentences and formulates conceptual questions (*"What is..."*, *"Explain the concept of..."*, *"Describe the significance of..."*) paired with ground-truth contextual reference answers.
+4. **Multilingual Translation Module**: Automatically translates generated questions, options, and answer keys into target languages (Spanish, French, German, Hindi, Tamil, Telugu, Chinese, Japanese, Arabic, Russian, Portuguese, Italian).
+5. **Levenshtein Distance Response Validation Engine**: Evaluates user-submitted responses against expected reference answers, calculates exact character edit distance, and computes a calibrated similarity percentage score.
 
 ---
 
@@ -170,6 +171,7 @@ print('Validation Score:', eval_res['similarity_percentage'], '%')
 ```
 QGen-Atlas/
 ├── app.py                            # Flask web application & API route handlers
+├── mcq.py                            # MCQTest class (Multiple choice question & distractor generation)
 ├── objective.py                      # ObjectiveTest class (NLTK POS tagging & chunking fill-in-blanks)
 ├── subjective.py                     # SubjectiveTest class (Concept extraction & pattern queries)
 ├── BERT_translate_custom.py          # Multilingual translation engine (GoogleTranslator batch API)

@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath('.'))
 
 from objective import ObjectiveTest
 from subjective import SubjectiveTest
+from mcq import MCQTest
 from BERT_translate_custom import translate_questions, translate_text
 from validation import compute_levenshtein_similarity, evaluate_response
 from app import app, CURRENT_QUIZ
@@ -25,6 +26,20 @@ class TestQGenAtlasE2E(unittest.TestCase):
         )
         self.app = app.test_client()
         self.app.testing = True
+
+    def test_mcq_generation(self):
+        print("\n--- Testing MCQ Questions Generation ---")
+        generator = MCQTest(self.sample_text, num_questions=3)
+        questions = generator.generate_questions()
+        self.assertGreaterEqual(len(questions), 1)
+        for q in questions:
+            self.assertIn("________", q["question"])
+            self.assertIn("options", q)
+            self.assertEqual(len(q["options"]), 4)
+            self.assertIn(q["answer"], q["options"])
+            print(f"MCQ Q{q['id']}: {q['question']}")
+            print(f"Options: {q['options']}")
+            print(f"Correct Answer: {q['answer']}\n")
 
     def test_objective_generation(self):
         print("\n--- Testing Objective Questions Generation ---")

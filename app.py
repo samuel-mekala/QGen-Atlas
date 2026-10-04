@@ -28,6 +28,7 @@ ensure_nltk_resources()
 
 from objective import ObjectiveTest
 from subjective import SubjectiveTest
+from mcq import MCQTest
 from BERT_translate_custom import translate_questions, translate_text, SUPPORTED_LANGUAGES
 from validation import evaluate_response
 
@@ -57,7 +58,9 @@ def generate():
         if not text:
             return redirect(url_for('index'))
 
-        if test_type == 'subjective':
+        if test_type == 'mcq':
+            generator = MCQTest(text, num_questions=num_questions)
+        elif test_type == 'subjective':
             generator = SubjectiveTest(text, num_questions=num_questions)
         else:
             generator = ObjectiveTest(text, num_questions=num_questions)
@@ -132,7 +135,9 @@ def api_generate():
     except (ValueError, TypeError):
         num_q = 5
 
-    if test_type == 'subjective':
+    if test_type == 'mcq':
+        gen = MCQTest(text, num_questions=num_q)
+    elif test_type == 'subjective':
         gen = SubjectiveTest(text, num_questions=num_q)
     else:
         gen = ObjectiveTest(text, num_questions=num_q)

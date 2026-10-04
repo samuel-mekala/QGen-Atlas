@@ -46,10 +46,24 @@
                         <span class="badge bg-primary rounded-pill px-3 py-2">Question {{ loop.index }}</span>
                     </div>
                     <h5 class="fw-semibold text-dark mb-3">{{ q.question }}</h5>
-                    <div class="mb-2">
-                        <label for="user_answer_{{ q.id }}" class="form-label text-muted fw-semibold">Your Response:</label>
-                        <input type="text" class="form-control form-control-lg" id="user_answer_{{ q.id }}" name="user_answer_{{ q.id }}" placeholder="Type your answer here..." required autocomplete="off">
-                    </div>
+                    {% if q.options %}
+                        <label class="form-label text-muted fw-semibold mb-2">Select Your Choice:</label>
+                        <div class="d-flex flex-column gap-2 mb-2">
+                            {% for option in q.options %}
+                                <div class="form-check p-3 border rounded-3 bg-light d-flex align-items-center">
+                                    <input class="form-check-input me-3" type="radio" name="user_answer_{{ q.id }}" id="opt_{{ q.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                    <label class="form-check-label fw-medium text-dark fs-6" for="opt_{{ q.id }}_{{ loop.index }}">
+                                        {{ option }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="mb-2">
+                            <label for="user_answer_{{ q.id }}" class="form-label text-muted fw-semibold">Your Response:</label>
+                            <input type="text" class="form-control form-control-lg" id="user_answer_{{ q.id }}" name="user_answer_{{ q.id }}" placeholder="Type your answer here..." required autocomplete="off">
+                        </div>
+                    {% endif %}
                 </div>
             {% endfor %}
 
