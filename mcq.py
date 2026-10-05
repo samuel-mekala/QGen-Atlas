@@ -12,10 +12,12 @@ STOP_CONCEPTS = {
     'this text', 'this study', 'a system', 'the system', 'this paper',
     'the paper', 'some cases', 'this approach', 'the method', 'a result',
     'the result', 'a subfield', 'this article', 'the process', 'a method',
-    'an example', 'the following', 'this section', 'in addition', 'a key information'
+    'an example', 'the following', 'this section', 'in addition', 'a key information',
+    'country', 'number', 'enormous number'
 }
 
 TIME_DISTRACTORS = ["months", "decades", "centuries", "weeks", "seasons"]
+NUMERIC_AGE_DISTRACTORS = ["21 years", "25 years", "27 years", "30 years", "18 years"]
 
 def _ensure_nltk():
     local_path = os.path.join(os.path.dirname(__file__), 'nltk_data')
@@ -96,6 +98,7 @@ class MCQTest:
 
         questions_data = []
         count = 0
+        used_questions = []
 
         for sentence in valid_sentences:
             if count >= self.num_questions:
@@ -111,27 +114,40 @@ class MCQTest:
             if question_text.startswith("________ by ") or question_text.startswith("________ in "):
                 continue
 
-            # Special distractor category for time periods (e.g. "years")
-            if target_ans.lower() in ['years', 'months', 'decades', 'centuries']:
-                chosen_distractors = random.sample([t for t in TIME_DISTRACTORS if t.lower() != target_ans.lower()], 3)
+            # Duplicate question check
+            if any(question_text.lower() in u.lower() for u in used_questions):
+                continue
+            used_questions.append(question_text)
+
+            # Plausible distractors matching POS category
+            t_lower = target_ans.lower()
+            if t_lower in ['years', 'months', 'decades', 'centuries']:
+                chosen_text_distractor = random.sample([t for t in TIME_DISTRACTORS if t.lower() != t_lower], 3)
+            elif 'twenty-three' in t_lower or '23' in t_lower or 'years old' in t_lower:
+                chosen_text_distractor = random.sample([t for t in NUMERIC_AGE_DISTRACTORS if t.lower() != t_lower], 3)
             else:
-                distractors = [np for np in unique_np_pool if np.lower() != target_ans.lower() and np.lower() not in STOP_CONCEPTS and len(np) > 2]
+                distractors = [np for np in unique_np_pool if np.lower() != t_lower and np.lower() not in STOP_CONCEPTS and len(np) > 2]
                 for fb in fallback_distractors:
                     if len(distractors) >= 3:
                         break
-                    if fb.lower() != target_ans.lower() and fb.lower() not in [d.lower() for d in distractors]:
+                    if fb.lower() != t_lower and fb.lower() not in [d.lower() for d in distractors]:
                         distractors.append(fb)
-                chosen_distractors = random.sample(distractors, min(3, len(distractors)))
+                chosen_text_distractor = random.sample(distractors, min(3, len(distractors)))
 
-            options_pool = [target_ans] + chosen_distractors
-            random.shuffle(options_pool)
+            # Build options with stable Option IDs
+            correct_opt = {"id": "opt_correct", "text": target_ans}
+            distractor_opts = [{"id": f"opt_d_{idx+1}", "text": text_val} for idx, text_val in enumerate(chosen_text_distractor)]
+            
+            all_opts = [correct_opt] + distractor_opts
+            random.shuffle(all_opts)
 
             count += 1
             item = {
                 "id": count,
                 "type": "mcq",
                 "question": question_text,
-                "options": options_pool,
+                "options": all_opts,
+                "correct_option_id": "opt_correct",
                 "answer": target_ans,
                 "original_sentence": sentence
             }

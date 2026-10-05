@@ -96,13 +96,21 @@ def validate():
 
         results = []
         total_score = 0.0
+        test_type = CURRENT_QUIZ.get('test_type', 'objective')
 
         for item in questions:
             q_id = str(item['id'])
             user_ans = request.form.get(f'user_answer_{q_id}', '').strip()
             expected_ans = item['answer']
+            correct_opt_id = item.get('correct_option_id')
             
-            eval_res = evaluate_response(user_ans, expected_ans, question_type=CURRENT_QUIZ.get('test_type', 'objective'))
+            eval_res = evaluate_response(
+                user_response=user_ans, 
+                expected_answer=expected_ans, 
+                question_type=test_type,
+                user_option_id=user_ans,
+                correct_option_id=correct_opt_id
+            )
             eval_res['question'] = item['question']
             eval_res['question_id'] = item['id']
             

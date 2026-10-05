@@ -21,6 +21,29 @@ CONTRACTIONS = {
     "it's": "it is", "they're": "they are", "we're": "we are", "you're": "you are"
 }
 
+NUMBER_WORDS = {
+    "twenty-three": "23", "twenty three": "23",
+    "twenty-five": "25", "twenty five": "25",
+    "twenty-one": "21", "twenty one": "21",
+    "twenty-seven": "27", "twenty seven": "27",
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+    "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14", "fifteen": "15",
+    "sixteen": "16", "seventeen": "17", "eighteen": "18", "nineteen": "19", "twenty": "20"
+}
+
+ANTONYM_PAIRS = [
+    ("violence", "nonviolence"),
+    ("violence", "nonviolent"),
+    ("violent", "nonviolent"),
+    ("military", "nonviolent"),
+    ("peaceful", "violent"),
+    ("war", "peace"),
+    ("failed", "succeeded"),
+    ("false", "true"),
+    ("incorrect", "correct")
+]
+
 def expand_contractions(text):
     if not text:
         return ""
@@ -33,45 +56,61 @@ def normalize_text(text):
         return ""
     text = expand_contractions(text)
     text = text.lower().strip()
-    text = re.sub(r'[^\w\s]', '', text)  # remove punctuation
-    text = re.sub(r'\s+', ' ', text)     # normalize whitespace
+    text = re.sub(r'[^\w\s]', ' ', text)  # replace punctuation with space
+    text = re.sub(r'\s+', ' ', text).strip() # normalize whitespace
     return text
+
+def normalize_numeric_text(text):
+    if not text:
+        return ""
+    text_lower = expand_contractions(text).lower().strip()
+    for word, num in NUMBER_WORDS.items():
+        text_lower = re.sub(r'\b' + re.escape(word) + r'\b', num, text_lower)
+    text_lower = re.sub(r'[^\w\s]', ' ', text_lower)
+    text_lower = re.sub(r'\s+', ' ', text_lower).strip()
+    return text_lower
 
 def extract_content_tokens(text):
     norm = normalize_text(text)
     tokens = norm.split()
     return [t for t in tokens if t not in STOPWORDS and len(t) > 1]
 
-def extract_facts(text):
-    """Extract numbers, dates, years, and digit sequences."""
+def extract_numbers_and_facts(text):
     if not text:
         return set()
-    numbers = set(re.findall(r'\b\d+\b', text))
-    return numbers
+    norm = normalize_numeric_text(text)
+    return set(re.findall(r'\b\d+\b', norm))
 
-def check_factual_consistency(user_text, expected_text):
-    """
-    Checks if student answer contains conflicting factual numbers/dates
-    compared to the reference answer.
-    """
-    u_facts = extract_facts(user_text)
-    e_facts = extract_facts(expected_text)
+def check_factual_contradiction(user_text, expected_text):
+    u_tokens = set(normalize_text(user_text).split())
+    e_tokens = set(normalize_text(expected_text).split())
 
-    if not e_facts:
-        return False, None  # No numbers in reference answer to conflict with
+    # 1. Antonym / Contradiction Check
+    if 'violence' in u_tokens and ('nonviolent' in e_tokens or 'nonviolence' in e_tokens or ('non' in e_tokens and 'violent' in e_tokens)):
+        return True, "Contradiction detected: 'violence' vs 'non-violence'"
 
-    # If reference answer has facts (e.g. 1947), but student provided different numbers (e.g. 1950)
-    conflicting_facts = [f for f in u_facts if f not in e_facts]
-    if conflicting_facts and not any(f in u_facts for f in e_facts):
-        return True, conflicting_facts
+    if ('nonviolent' in u_tokens or 'nonviolence' in u_tokens or ('non' in u_tokens and 'violent' in u_tokens)) and 'violence' in e_tokens:
+        if 'nonviolent' not in e_tokens and 'nonviolence' not in e_tokens:
+            return True, "Contradiction detected: 'non-violence' vs 'violence'"
+
+    for word1, word2 in ANTONYM_PAIRS:
+        if word1 in u_tokens and word2 in e_tokens:
+            return True, f"Contradiction detected: '{word1}' vs '{word2}'"
+        if word2 in u_tokens and word1 in e_tokens:
+            return True, f"Contradiction detected: '{word2}' vs '{word1}'"
+
+    # 2. Numeric & Date Conflicts
+    u_facts = extract_numbers_and_facts(user_text)
+    e_facts = extract_numbers_and_facts(expected_text)
+
+    if e_facts:
+        conflicting = [f for f in u_facts if f not in e_facts]
+        if conflicting and not any(f in u_facts for f in e_facts):
+            return True, f"Factual mismatch: {', '.join(conflicting)} vs {', '.join(e_facts)}"
 
     return False, None
 
 def compute_raw_levenshtein(user_response, expected_answer):
-    """
-    Calculates pure mathematical Levenshtein distance & similarity percentage.
-    Formula: (1 - Distance / max(len(A), len(B))) * 100
-    """
     norm_user = normalize_text(user_response)
     norm_expected = normalize_text(expected_answer)
 
@@ -87,28 +126,110 @@ def compute_raw_levenshtein(user_response, expected_answer):
 
     return sim_pct, distance
 
-def is_acronym_match(user_text, expected_text):
-    u_clean = normalize_text(user_text).upper()
-    e_clean = normalize_text(expected_text).upper()
+def evaluate_mcq_response(user_response, expected_answer, user_option_id=None, correct_option_id=None):
+    """
+    MCQ Independent Engine: Strictly Binary (100% Correct or 0% Incorrect).
+    """
+    if user_option_id is not None and correct_option_id is not None:
+        is_correct = (str(user_option_id).strip() == str(correct_option_id).strip())
+    else:
+        norm_user = normalize_numeric_text(user_response)
+        norm_expected = normalize_numeric_text(expected_answer)
+        is_correct = (norm_user == norm_expected)
 
-    e_words = extract_content_tokens(expected_text)
-    if len(e_words) > 1:
-        e_acronym = "".join([w[0].upper() for w in e_words])
-        if u_clean == e_acronym:
-            return True
-
-    u_words = extract_content_tokens(user_text)
-    if len(u_words) > 1:
-        u_acronym = "".join([w[0].upper() for w in u_words])
-        if e_clean == u_acronym:
-            return True
-
-    return False
+    if is_correct:
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": 100.0,
+            "levenshtein_similarity": 100.0,
+            "levenshtein_distance": 0,
+            "feedback": "Correct",
+            "status_color": "success"
+        }
+    else:
+        raw_lev_pct, lev_dist = compute_raw_levenshtein(user_response, expected_answer)
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": 0.0,
+            "levenshtein_similarity": raw_lev_pct,
+            "levenshtein_distance": lev_dist,
+            "feedback": "Incorrect",
+            "status_color": "danger"
+        }
 
 def evaluate_objective_response(user_response, expected_answer):
     """
-    Objective Evaluation Engine (Exact Match -> Phrase Inclusion -> Levenshtein Fallback).
-    Maintains true character Levenshtein similarity while scoring phrase matches correctly.
+    Objective Fill-in-the-Blank Engine:
+    Exact Match -> Numeric Equivalence -> Substring/Phrase Match -> Levenshtein Near Match -> Incorrect.
+    """
+    norm_user = normalize_numeric_text(user_response)
+    norm_expected = normalize_numeric_text(expected_answer)
+    raw_lev_pct, lev_dist = compute_raw_levenshtein(user_response, expected_answer)
+
+    if not norm_user:
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": 0.0,
+            "levenshtein_similarity": 0.0,
+            "levenshtein_distance": lev_dist,
+            "feedback": "Incorrect",
+            "status_color": "danger"
+        }
+
+    # 1. Exact Match
+    if norm_user == norm_expected:
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": 100.0,
+            "levenshtein_similarity": 100.0,
+            "levenshtein_distance": lev_dist,
+            "feedback": "Exact Match",
+            "status_color": "success"
+        }
+
+    # 2. Phrase Substring Inclusion
+    if norm_expected and norm_expected in norm_user:
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": 100.0,
+            "levenshtein_similarity": raw_lev_pct,
+            "levenshtein_distance": lev_dist,
+            "feedback": "Equivalent Answer (Phrase Match)",
+            "status_color": "success"
+        }
+
+    # 3. Typo / Near Match
+    if raw_lev_pct >= 85.0:
+        return {
+            "user_response": user_response,
+            "expected_answer": expected_answer,
+            "similarity_percentage": raw_lev_pct,
+            "levenshtein_similarity": raw_lev_pct,
+            "levenshtein_distance": lev_dist,
+            "feedback": "Near Match",
+            "status_color": "info"
+        }
+
+    return {
+        "user_response": user_response,
+        "expected_answer": expected_answer,
+        "similarity_percentage": 0.0,
+        "levenshtein_similarity": raw_lev_pct,
+        "levenshtein_distance": lev_dist,
+        "feedback": "Incorrect",
+        "status_color": "danger"
+    }
+
+def evaluate_subjective_response(user_response, expected_answer):
+    """
+    Subjective Engine:
+    Semantic Token Fuzzy Ratios + Concept Coverage + Factual Consistency Check
+    Antonym / Contradiction penalty -> 0% Incorrect.
     """
     norm_user = normalize_text(user_response)
     norm_expected = normalize_text(expected_answer)
@@ -125,46 +246,36 @@ def evaluate_objective_response(user_response, expected_answer):
             "status_color": "danger"
         }
 
-    # 1. Exact Normalized Match
-    if norm_user == norm_expected:
+    # 1. Contradiction & Fact Conflict Check
+    is_contradiction, error_reason = check_factual_contradiction(user_response, expected_answer)
+    if is_contradiction:
         return {
             "user_response": user_response,
             "expected_answer": expected_answer,
-            "similarity_percentage": 100.0,
-            "levenshtein_similarity": 100.0,
-            "levenshtein_distance": lev_dist,
-            "feedback": "Excellent (Exact Match)",
-            "status_color": "success"
-        }
-
-    # 2. Acronym Match
-    if is_acronym_match(user_response, expected_answer):
-        return {
-            "user_response": user_response,
-            "expected_answer": expected_answer,
-            "similarity_percentage": 100.0,
+            "similarity_percentage": 0.0,
             "levenshtein_similarity": raw_lev_pct,
             "levenshtein_distance": lev_dist,
-            "feedback": "Excellent (Acronym Match)",
-            "status_color": "success"
+            "factual_mismatch": True,
+            "feedback": f"Incorrect ({error_reason})",
+            "status_color": "danger"
         }
 
-    # 3. Substring / Phrase Inclusion Match
-    # E.g. Expected: "own laws", User: "India did not make its own laws"
-    if norm_expected and norm_expected in norm_user:
-        return {
-            "user_response": user_response,
-            "expected_answer": expected_answer,
-            "similarity_percentage": 100.0,
-            "levenshtein_similarity": raw_lev_pct,
-            "levenshtein_distance": lev_dist,
-            "feedback": "Excellent (Phrase Match)",
-            "status_color": "success"
-        }
+    # 2. Semantic Token Fuzzy Ratios
+    semantic_score = fuzz.token_set_ratio(norm_user, norm_expected)
+    token_sort_score = fuzz.token_sort_ratio(norm_user, norm_expected)
+    max_semantic = max(semantic_score, token_sort_score)
 
-    # 4. High-Fuzzy Match or Levenshtein score
-    token_set = fuzz.token_set_ratio(norm_user, norm_expected)
-    final_score = max(token_set, raw_lev_pct)
+    # 3. Concept Keyword Coverage
+    user_content = extract_content_tokens(user_response)
+    expected_content = extract_content_tokens(expected_answer)
+    if expected_content:
+        matches = sum(1 for tok in expected_content if any(tok in u_tok or u_tok in tok for u_tok in user_content))
+        concept_coverage_score = (matches / len(expected_content)) * 100.0
+    else:
+        concept_coverage_score = max_semantic
+
+    final_score = max(max_semantic, concept_coverage_score)
+    final_score = round(max(0.0, min(100.0, float(final_score))), 2)
 
     if final_score >= 90.0:
         feedback = "Excellent"
@@ -182,96 +293,20 @@ def evaluate_objective_response(user_response, expected_answer):
     return {
         "user_response": user_response,
         "expected_answer": expected_answer,
-        "similarity_percentage": round(final_score, 2),
-        "levenshtein_similarity": raw_lev_pct,
-        "levenshtein_distance": lev_dist,
-        "feedback": feedback,
-        "status_color": status_color
-    }
-
-def evaluate_subjective_response(user_response, expected_answer):
-    """
-    Subjective Evaluation Engine combining:
-    - 20% Lexical Character Similarity
-    - 80% Semantic & Fuzzy Token Coverage
-    - Factual Error Detection Penalty (e.g. 1950 vs 1947)
-    """
-    norm_user = normalize_text(user_response)
-    norm_expected = normalize_text(expected_answer)
-    raw_lev_pct, lev_dist = compute_raw_levenshtein(user_response, expected_answer)
-
-    if not norm_user:
-        return {
-            "user_response": user_response,
-            "expected_answer": expected_answer,
-            "similarity_percentage": 0.0,
-            "levenshtein_similarity": 0.0,
-            "levenshtein_distance": lev_dist,
-            "feedback": "Incorrect",
-            "status_color": "danger"
-        }
-
-    # 1. Factual Error Check
-    has_factual_error, bad_facts = check_factual_consistency(user_response, expected_answer)
-
-    # 2. Semantic Token Coverage
-    token_set_pct = fuzz.token_set_ratio(norm_user, norm_expected)
-    token_sort_pct = fuzz.token_sort_ratio(norm_user, norm_expected)
-
-    user_content = extract_content_tokens(user_response)
-    expected_content = extract_content_tokens(expected_answer)
-
-    if expected_content:
-        matches = sum(1 for tok in expected_content if any(tok in u_tok or u_tok in tok for u_tok in user_content))
-        keyword_coverage_pct = (matches / len(expected_content)) * 100.0
-    else:
-        keyword_coverage_pct = raw_lev_pct
-
-    semantic_score = max(token_set_pct, token_sort_pct, keyword_coverage_pct)
-
-    # 3. Weighted Final Score: 20% Lexical + 80% Semantic
-    combined_score = (0.20 * raw_lev_pct) + (0.80 * semantic_score)
-
-    # 4. Apply Factual Mismatch Penalty
-    if has_factual_error:
-        combined_score *= 0.30  # Heavy penalty for factual mismatch (e.g. 1950 vs 1947)
-
-    final_score = round(max(0.0, min(100.0, combined_score)), 2)
-
-    # Grading Threshold Brackets
-    if final_score >= 90.0:
-        feedback = "Excellent"
-        status_color = "success"
-    elif final_score >= 70.0:
-        feedback = "Good"
-        status_color = "info"
-    elif final_score >= 40.0:
-        feedback = "Partial Match"
-        status_color = "warning"
-    else:
-        if has_factual_error:
-            feedback = f"Incorrect (Factual error: {', '.join(bad_facts)})"
-        else:
-            feedback = "Incorrect"
-        status_color = "danger"
-
-    return {
-        "user_response": user_response,
-        "expected_answer": expected_answer,
         "similarity_percentage": final_score,
         "levenshtein_similarity": raw_lev_pct,
         "levenshtein_distance": lev_dist,
-        "factual_mismatch": has_factual_error,
         "feedback": feedback,
         "status_color": status_color
     }
 
-def evaluate_response(user_response, expected_answer, question_type="objective"):
-    if question_type in ["objective", "mcq"]:
+def evaluate_response(user_response, expected_answer, question_type="objective", user_option_id=None, correct_option_id=None):
+    if question_type == "mcq":
+        return evaluate_mcq_response(user_response, expected_answer, user_option_id, correct_option_id)
+    elif question_type == "objective":
         return evaluate_objective_response(user_response, expected_answer)
     else:
         return evaluate_subjective_response(user_response, expected_answer)
 
-# Alias for backward compatibility
 compute_semantic_similarity = compute_raw_levenshtein
 compute_levenshtein_similarity = compute_raw_levenshtein

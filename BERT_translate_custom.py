@@ -44,7 +44,15 @@ def translate_questions(questions_list, target_lang='en'):
                 q_copy['question'] = translator.translate(q['question']) or q['question']
                 q_copy['answer'] = translator.translate(q['answer']) or q['answer']
                 if 'options' in q and isinstance(q['options'], list):
-                    q_copy['options'] = [translator.translate(opt) or opt for opt in q['options']]
+                    new_opts = []
+                    for opt in q['options']:
+                        if isinstance(opt, dict):
+                            opt_copy = dict(opt)
+                            opt_copy['text'] = translator.translate(opt['text']) or opt['text']
+                            new_opts.append(opt_copy)
+                        else:
+                            new_opts.append(translator.translate(opt) or opt)
+                    q_copy['options'] = new_opts
                 q_copy['translated_lang'] = target_lang
             except Exception as item_err:
                 logging.error(f"Translation item error: {item_err}")

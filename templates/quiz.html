@@ -51,9 +51,9 @@
                         <div class="d-flex flex-column gap-2 mb-2">
                             {% for option in q.options %}
                                 <div class="form-check p-3 border rounded-3 bg-light d-flex align-items-center">
-                                    <input class="form-check-input me-3" type="radio" name="user_answer_{{ q.id }}" id="opt_{{ q.id }}_{{ loop.index }}" value="{{ option }}" required>
+                                    <input class="form-check-input me-3" type="radio" name="user_answer_{{ q.id }}" id="opt_{{ q.id }}_{{ loop.index }}" value="{{ option.id if option.id else option }}" required>
                                     <label class="form-check-label fw-medium text-dark fs-6" for="opt_{{ q.id }}_{{ loop.index }}">
-                                        {{ option }}
+                                        {{ option.text if option.text else option }}
                                     </label>
                                 </div>
                             {% endfor %}

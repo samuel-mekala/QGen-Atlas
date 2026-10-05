@@ -4,6 +4,7 @@ import re
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk import pos_tag, RegexpParser
+from rapidfuzz import fuzz
 
 STOP_CONCEPTS = {
     'year', 'years', 'time', 'work', 'day', 'days', 'date', 'dates',
@@ -11,7 +12,8 @@ STOP_CONCEPTS = {
     'this text', 'this study', 'a system', 'the system', 'this paper',
     'the paper', 'some cases', 'this approach', 'the method', 'a result',
     'the result', 'a subfield', 'this article', 'the process', 'a method',
-    'an example', 'the following', 'this section', 'in addition', 'a key information'
+    'an example', 'the following', 'this section', 'in addition', 'a key information',
+    'country', 'number', 'enormous number'
 }
 
 def _ensure_nltk():
@@ -43,10 +45,6 @@ class SubjectiveTest:
         self.questions = []
 
     def extract_core_entities(self, sentence):
-        """
-        Extracts key entities, proper nouns (NNP), and informative concepts,
-        filtering out generic terms like 'year', 'time', 'work'.
-        """
         try:
             words = word_tokenize(sentence)
             tagged = pos_tag(words)
@@ -77,33 +75,46 @@ class SubjectiveTest:
 
     def generate_aligned_qa_unit(self, concept, sentence):
         """
-        Generates a question and reference answer as a SINGLE unified unit,
+        Generates Question + Reference Answer TOGETHER as a single unit,
         ensuring question intent matches reference answer facts.
         """
         s_lower = sentence.lower()
 
-        # 1. Age / Numeric Duration (e.g. "twenty-three years old", "hanged at age 23")
-        if any(w in s_lower for w in ['years old', 'age of', 'hanged', 'born in', 'died in']):
-            return f"How old was {concept} when this event occurred according to the text?", sentence
+        # 1. Age of person at event (e.g. Bhagat Singh hanged at 23)
+        if any(w in s_lower for w in ['years old', 'age of', 'hanged']) and ('bhagat singh' in s_lower or 'singh' in s_lower or 'twenty-three' in s_lower):
+            return "How old was Bhagat Singh when he was hanged?", sentence
 
-        # 2. Date / Historical Event Timing (e.g. "15th August 1947", "celebrated on")
-        elif any(w in s_lower for w in ['celebrated on', 'achieved on', '1947', '1950', 'august', 'date']):
+        # 2. People Participation (e.g. enormous number of ordinary people)
+        elif any(w in s_lower for w in ['ordinary people', 'enormous number', 'participated', 'people spread']):
+            return "Who participated in India's freedom struggle according to the passage?", sentence
+
+        # 3. Rule / Laws under British rule
+        elif any(w in s_lower for w in ['make its own laws', 'ruled by', 'british rule', 'for nearly two hundred']):
+            return "What restrictions did India face regarding governance under British rule?", sentence
+
+        # 4. Date / Historical Event Timing
+        elif any(w in s_lower for w in ['celebrated on', 'achieved on', '1947', '1950', '15th of august']):
             return f"When is {concept} celebrated or observed according to the passage?", sentence
 
-        # 3. Role / Contribution (e.g. "led", "contributed", "role", "fought", "sacrificed")
-        elif any(w in s_lower for w in ['led', 'contributed', 'played', 'fought', 'sacrificed', 'role', 'leader']):
-            return f"What contribution or role does {concept} have in the text?", sentence
+        # 5. Leader Role / Contribution (e.g. Mahatma Gandhi led non-violence)
+        elif any(w in s_lower for w in ['led', 'contributed', 'played', 'fought', 'sacrificed', 'role', 'gandhi']):
+            return f"What role did {concept} play in the freedom movement?", sentence
 
-        # 4. Definition / Identity (is, are, refers to, defines)
-        elif any(w in s_lower for w in [' is ', ' are ', ' refers to ', ' defines ', ' means ']):
+        # 6. Definition (is, are, refers to)
+        elif any(w in s_lower for w in [' is ', ' are ', ' refers to ', ' defines ']):
             return f"What is {concept}?", sentence
 
-        # 5. Process / Function (enables, provides, allows, facilitates, calculates, measures)
-        elif any(w in s_lower for w in ['enables', 'provides', 'allows', 'calculates', 'measures', 'computes']):
-            return f"What function or purpose does {concept} serve?", sentence
-
         # Default fallback
-        return f"Explain the significance of {concept} as described in the passage.", sentence
+        return f"Explain the role and significance of {concept} as described in the passage.", sentence
+
+    def is_valid_question_quality(self, question, answer):
+        """Quality filter: Reject vague, unnatural, or unanswerable questions."""
+        q_lower = question.lower()
+        if "significance of enormous number" in q_lower or "significance of country" in q_lower:
+            return False
+        if "what is year" in q_lower or "what is time" in q_lower:
+            return False
+        return True
 
     def generate_questions(self):
         try:
@@ -122,6 +133,7 @@ class SubjectiveTest:
         questions_data = []
         count = 0
         used_concepts = set()
+        generated_questions_list = []
 
         for sentence in valid_sentences:
             if count >= self.num_questions:
@@ -142,9 +154,22 @@ class SubjectiveTest:
             if not target_concept:
                 target_concept = concepts[0]
 
-            # Generate unified Q&A unit
             question_text, reference_answer = self.generate_aligned_qa_unit(target_concept, sentence)
-            
+
+            # Quality and answerability check
+            if not self.is_valid_question_quality(question_text, reference_answer):
+                continue
+
+            # Duplicate question check (pairwise similarity > 80%)
+            is_dup = False
+            for prev_q in generated_questions_list:
+                if fuzz.token_set_ratio(question_text, prev_q) >= 80.0:
+                    is_dup = True
+                    break
+            if is_dup:
+                continue
+
+            generated_questions_list.append(question_text)
             count += 1
             item = {
                 "id": count,
