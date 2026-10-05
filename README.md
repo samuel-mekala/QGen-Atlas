@@ -5,9 +5,9 @@
 [![Framework](https://img.shields.io/badge/Flask-3.0%2B-black?style=for-the-badge&logo=flask)](https://flask.palletsprojects.com/)
 [![NLP Engine](https://img.shields.io/badge/NLTK-Chunking-orange?style=for-the-badge&logo=nltk)](https://www.nltk.org/)
 [![Translation](https://img.shields.io/badge/Translation-Multilingual-purple?style=for-the-badge&logo=google-translate)](https://qgen-atlas.onrender.com/)
-[![Validation](https://img.shields.io/badge/Algorithm-Levenshtein%20Distance-red?style=for-the-badge)](https://qgen-atlas.onrender.com/)
+[![Validation](https://img.shields.io/badge/Validation-3--Engine%20Evaluation-red?style=for-the-badge)](https://qgen-atlas.onrender.com/)
 
-An advanced end-to-end Natural Language Processing (NLP) web application and assessment platform designed for automated query generation (objective & subjective) from source text, multi-language translation, and string-distance response validation.
+An advanced end-to-end Natural Language Processing (NLP) web application and assessment platform designed for automated query generation (objective & subjective) from source text, multi-language translation, and tri-engine response validation.
 
 🔗 **Live Application URL**: [https://qgen-atlas.onrender.com/](https://qgen-atlas.onrender.com/)
 
@@ -25,13 +25,16 @@ An advanced end-to-end Natural Language Processing (NLP) web application and ass
 
 ## 📌 Project Overview & Objectives
 
-In modern educational, research, and technical domains, manually constructing comprehension tests and validating user answers is time-consuming and restricted across linguistic boundaries. **QGen Atlas** solves these challenges by combining syntactic parsing, part-of-speech (POS) tagging, regexp chunking, and fuzzy string distance metrics into a unified web-based solution:
+In modern educational, research, and technical domains, manually constructing comprehension tests and validating user answers is time-consuming and restricted across linguistic boundaries. **QGen Atlas** solves these challenges by combining syntactic parsing, part-of-speech (POS) tagging, regexp chunking, and multi-engine response evaluation into a unified web-based solution:
 
 1. **Multiple Choice Questions (MCQ Generation)**: Syntactically extracts key noun phrases as target answers and dynamically generates 3 distinct contextual distractors to form 4-option multiple choice questions (`Option A`, `Option B`, `Option C`, `Option D`).
 2. **Objective Query Generation (Fill-in-the-Blank)**: Syntactically parses source text, extracts key noun phrases, and masks target terms with blanks (`________`) while preserving expected answer keys.
-3. **Subjective Conceptual Query Generation**: Identifies subject entities across sentences and formulates conceptual questions (*"What is..."*, *"Explain the concept of..."*, *"Describe the significance of..."*) paired with ground-truth contextual reference answers.
+3. **Subjective Conceptual Query Generation**: Identifies subject entities across sentences and formulates conceptual questions paired with ground-truth contextual reference answers.
 4. **Multilingual Translation Module**: Automatically translates generated questions, options, and answer keys into target languages (Spanish, French, German, Hindi, Tamil, Telugu, Chinese, Japanese, Arabic, Russian, Portuguese, Italian).
-5. **Levenshtein Distance Response Validation Engine**: Evaluates user-submitted responses against expected reference answers, calculates exact character edit distance, and computes a calibrated similarity percentage score.
+5. **Tri-Engine Response Validation Architecture**:
+   - **MCQ Engine**: Binary option ID matching ($100\%$ Correct vs $0\%$ Incorrect).
+   - **Objective Engine**: String distance normalization with numeric word equivalence (e.g. `23` $\leftrightarrow$ `twenty-three`).
+   - **Subjective Engine**: Hybrid scoring combining semantic similarity, entity coverage, and factual/antonym contradiction penalties ($0\%$ for opposite facts like `violence` vs `non-violence`).
 
 ---
 
@@ -49,34 +52,38 @@ In modern educational, research, and technical domains, manually constructing co
                      │   Grammar: NP: {<DT>?<JJ>*<NN.*>+}
                      └───────────────┬───────────────┘
                                      │
-           ┌─────────────────────────┴─────────────────────────┐
-           ▼                                                   ▼
-┌─────────────────────────────┐                     ┌─────────────────────────────┐
-│    ObjectiveTest Module     │                     │    SubjectiveTest Module    │
-│ Masks Noun Phrase targets   │                     │  Concept Extraction &       │
-│ with fill-in-the-blank      │                     │  Pattern-based Questioning  │
-└──────────────┬──────────────┘                     └──────────────┬──────────────┘
-               │                                                   │
-               └─────────────────────────┬─────────────────────────┘
-                                         │
-                         Multilingual Translation Engine
-                            (GoogleTranslator Batch)
-                                         │
-                         Interactive Assessment Session
-                                         │
-                         Levenshtein Response Validation
-                       (Similarity % & Feedback Scoring)
+           ┌─────────────────────────┼─────────────────────────┐
+           ▼                         ▼                         ▼
+┌────────────────────┐    ┌────────────────────┐    ┌────────────────────┐
+│   MCQ Generator    │    │ Objective Engine   │    │ Subjective Engine  │
+│ Categorical        │    │ Noun Phrase        │    │ Aligned Q&A Units  │
+│ Distractor Set     │    │ Blank Masking      │    │ Quality Filtered   │
+└──────────┬─────────┘    └──────────┬─────────┘    └──────────┬─────────┘
+           │                         │                         │
+           └─────────────────────────┼─────────────────────────┘
+                                     │
+                     Multilingual Translation Engine
+                        (GoogleTranslator Batch)
+                                     │
+                     Interactive Assessment Session
+                                     │
+                     Tri-Engine Validation Pipeline
+                     (Binary / Numeric / Semantic & Contradiction)
 ```
 
 ---
 
 ## 📏 Response Validation Algorithm
 
-The response validation engine computes similarity percentages using the **Levenshtein Distance Algorithm**:
+The response validation engine applies mode-specific evaluation pipelines:
 
-$$\text{Levenshtein Distance } d(a, b) = \text{Minimum edit operations (insertions, deletions, substitutions) to convert } a \rightarrow b$$
+### 1. MCQ Validation Engine
+$$\text{Score} = \begin{cases} 100.0\% & \text{if } \text{Selected Option ID} = \text{Correct Option ID} \\ 0.0\% & \text{otherwise} \end{cases}$$
 
-$$\text{Similarity Percentage} = \max\left(0.0, \left(1 - \frac{d(a, b)}{\max(\text{len}(a), \text{len}(b))}\right) \times 100\right)$$
+### 2. Objective & Subjective Validation Engine
+$$\text{Levenshtein Similarity} = \max\left(0.0, \left(1 - \frac{d(a, b)}{\max(\text{len}(a), \text{len}(b))}\right) \times 100\right)$$
+
+$$\text{Final Score} = \text{Levenshtein} \times \text{Numeric Equivalence Penalty} \times \text{Contradiction Penalty}$$
 
 ### Feedback Classification Matrix
 
